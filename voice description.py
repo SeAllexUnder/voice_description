@@ -124,19 +124,38 @@ def analyze_call(filename: str) -> Path:
 
 
 def _load_settings() -> dict[str, Any]:
+    _ensure_settings_file()
     settings = deepcopy(DEFAULT_SETTINGS)
-    if SETTINGS_FILE.is_file():
-        try:
-            custom_settings = json.loads(SETTINGS_FILE.read_text(encoding="utf-8-sig"))
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Ошибка JSON в {SETTINGS_FILE.name}, строка {exc.lineno}, столбец {exc.colno}: {exc.msg}"
-            ) from exc
-        if not isinstance(custom_settings, dict):
-            raise ValueError(f"Корень файла {SETTINGS_FILE.name} должен быть JSON-объектом.")
-        _merge_known_settings(settings, custom_settings)
+    try:
+        custom_settings = json.loads(SETTINGS_FILE.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Ошибка JSON в {SETTINGS_FILE.name}, строка {exc.lineno}, столбец {exc.colno}: {exc.msg}"
+        ) from exc
+    if not isinstance(custom_settings, dict):
+        raise ValueError(f"Корень файла {SETTINGS_FILE.name} должен быть JSON-объектом.")
+    _merge_known_settings(settings, custom_settings)
     _validate_settings(settings)
     return settings
+
+
+def _ensure_settings_file() -> None:
+    if SETTINGS_FILE.exists():
+        if not SETTINGS_FILE.is_file():
+            raise ValueError(f"Путь {SETTINGS_FILE} должен указывать на JSON-файл.")
+        return
+
+    try:
+        with SETTINGS_FILE.open("x", encoding="utf-8", newline="\n") as settings_file:
+            json.dump(DEFAULT_SETTINGS, settings_file, ensure_ascii=False, indent=2)
+            settings_file.write("\n")
+    except FileExistsError:
+        # Another process may have created the settings file at the same time.
+        pass
+    except OSError as exc:
+        raise OSError(
+            f"Не удалось создать {SETTINGS_FILE.name} рядом со скриптом: {exc}"
+        ) from exc
 
 
 def _merge_known_settings(target: dict[str, Any], source: dict[str, Any], prefix: str = "") -> None:

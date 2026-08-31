@@ -1,4 +1,5 @@
 .venv/
 models/
 *.xlsx
+*.json
 __pycache__/
