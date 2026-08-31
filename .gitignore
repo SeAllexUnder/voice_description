@@ -2,4 +2,5 @@
 models/
 *.xlsx
 *.json
+!voice settings.json
 __pycache__/

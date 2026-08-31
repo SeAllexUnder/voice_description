@@ -52,7 +52,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "temperature": 0.0,
         "condition_on_previous_text": True,
         "vad_filter": True,
-        "vad_min_silence_duration_ms": 300,
+        "vad_min_silence_duration_ms": 200,
         "initial_prompt": "",
         "hotwords": "",
     },
@@ -64,7 +64,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "min_duration_off": 0.5,
     },
     "postprocessing": {
-        "merge_max_gap_seconds": 1.2,
+        "merge_max_gap_seconds": 0.45,
     },
 }
 
@@ -430,7 +430,7 @@ def _transcribe(audio_path: Path, settings: dict[str, Any]) -> list[Word]:
 def _combine_words_and_speakers(
     words: list[Word],
     speaker_intervals: list[SpeakerInterval],
-    merge_max_gap_seconds: float = 1.2,
+    merge_max_gap_seconds: float = 0.45,
 ) -> list[Segment]:
     speaker_labels: dict[int, str] = {}
     combined: list[Segment] = []
@@ -460,15 +460,25 @@ def _combine_words_and_speakers(
 
 
 def _speaker_for_word(word: Word, intervals: list[SpeakerInterval]) -> int:
-    overlaps: list[tuple[float, float, int]] = []
+    overlaps: list[tuple[float, float, float, int]] = []
     midpoint = (word.start + word.end) / 2
+    word_duration = max(word.end - word.start, 1e-6)
     for interval in intervals:
         overlap = max(0.0, min(word.end, interval.end) - max(word.start, interval.start))
         if overlap > 0:
+            interval_duration = max(interval.end - interval.start, 1e-6)
+            normalized_overlap = overlap / min(word_duration, interval_duration)
             interval_midpoint = (interval.start + interval.end) / 2
-            overlaps.append((overlap, -abs(midpoint - interval_midpoint), interval.speaker_id))
+            overlaps.append(
+                (
+                    normalized_overlap,
+                    overlap,
+                    -abs(midpoint - interval_midpoint),
+                    interval.speaker_id,
+                )
+            )
     if overlaps:
-        return max(overlaps)[2]
+        return max(overlaps)[3]
     return min(
         intervals,
         key=lambda interval: min(abs(midpoint - interval.start), abs(midpoint - interval.end)),
